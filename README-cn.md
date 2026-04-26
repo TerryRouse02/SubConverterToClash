@@ -22,10 +22,6 @@
 
 ## 文件说明
 
-- `Claude.md`
-  - 给 Claude / Codex 的维护边界。
-- `Agent.md`
-  - 给后续 Agent 的实现和验证说明。
 - `readme.md`
   - 当前用户使用说明。
 - `Generate-ClashMeta-Profile.bat`
