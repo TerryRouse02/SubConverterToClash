@@ -1,7 +1,4 @@
 # Sub-Store ClashMeta Fixer
-
-推荐仓库名：`substore-clashmeta-fixer`
-
 ## 这是什么
 
 用于修复任何或 Sub-Store 导出的 ClashMeta / Mihomo 订阅。
