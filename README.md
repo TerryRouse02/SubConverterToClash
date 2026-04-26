@@ -1,8 +1,5 @@
 # Sub-Store ClashMeta Fixer
 
-
-Recommended repository name: `substore-clashmeta-fixer` 
-
 What is this? 
 
 Used for repairing any or Sub-Store exported ClashMeta / Mihomo subscriptions. 
@@ -26,8 +23,6 @@ This tool will complete:
 
 ## File Description 
 
-- `Claude.md`
-Set the maintenance boundaries for Claude / Codex. - `Agent.md`
 Explanation for the implementation and verification of the subsequent Agent. - `readme.md`
 Current User Instructions. - `Generate-ClashMeta-Profile.bat`
 - Windows double-click entry. - `Generate-ClashMeta-Profile.ps1`
