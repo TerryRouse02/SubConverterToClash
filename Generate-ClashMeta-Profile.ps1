@@ -3,7 +3,11 @@
     [string]$SubscriptionUrl,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath
+    [string]$OutputPath,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('Stable', 'Hybrid', 'Rich')]
+    [string]$RuleProfile = 'Hybrid'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,8 +16,9 @@ Set-StrictMode -Version 2.0
 
 $script:SupportedTypes = @('trojan', 'vless', 'hysteria2', 'hy2')
 $script:RegionOrder = @('US', 'HK', 'JP', 'SG', 'TW', 'KR', 'OTHER')
-$script:ProbeUrl = 'https://www.gstatic.com/generate_204'
+$script:ProbeUrl = 'https://cp.cloudflare.com/generate_204'
 $script:GroupProxy = '🚀 节点选择'
+$script:GroupManual = '🧭 手动选择'
 $script:GroupAuto = '⚡ 自动测速'
 $script:GroupFallback = '🛟 故障转移'
 $script:GroupInfo = 'ℹ️ 订阅信息'
@@ -325,8 +330,268 @@ function Add-HealthGroup {
     $Lines.Add('    interval: 300')
     $Lines.Add('    tolerance: 50')
     $Lines.Add('    lazy: true')
+    $Lines.Add('    timeout: 5000')
+    $Lines.Add(('    expected-status: {0}' -f (ConvertTo-YamlSingleQuoted '204/200')))
     $Lines.Add('    proxies:')
     Add-ProxyList -Lines $Lines -Names $Names -AllowEmptyDirect
+}
+
+function Add-DnsConfig {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Lines
+    )
+
+    $Lines.Add('dns:')
+    $Lines.Add('  enable: true')
+    $Lines.Add('  ipv6: false')
+    $Lines.Add('  enhanced-mode: fake-ip')
+    $Lines.Add('  fake-ip-range: 198.18.0.1/16')
+    $Lines.Add('  default-nameserver:')
+    foreach ($server in @('223.5.5.5', '119.29.29.29', '114.114.114.114')) {
+        $Lines.Add(('    - {0}' -f (ConvertTo-YamlSingleQuoted $server)))
+    }
+    $Lines.Add('  nameserver:')
+    foreach ($server in @('https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query', '223.5.5.5', '119.29.29.29')) {
+        $Lines.Add(('    - {0}' -f (ConvertTo-YamlSingleQuoted $server)))
+    }
+    $Lines.Add('  fake-ip-filter:')
+    foreach ($pattern in @(
+        '*.lan',
+        '*.local',
+        'localhost.ptlogin2.qq.com',
+        'localhost.sec.qq.com',
+        'time.*.com',
+        'time.*.gov',
+        'time.*.edu.cn',
+        'time1.cloud.tencent.com',
+        'time.ustc.edu.cn',
+        'ntp.*.com',
+        'ntp.aliyun.com',
+        'ntp.tencent.com',
+        'pool.ntp.org',
+        'stun.*.*',
+        'stun.*.*.*',
+        'dns.msftncsi.com',
+        'www.msftconnecttest.com',
+        'connect.rom.miui.com',
+        'router.asus.com',
+        'tplogin.cn',
+        'miwifi.com',
+        'tendawifi.com'
+    )) {
+        $Lines.Add(('    - {0}' -f (ConvertTo-YamlSingleQuoted $pattern)))
+    }
+}
+
+function Add-RichRuleProviders {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Lines
+    )
+
+    $providers = @(
+        [pscustomobject]@{ Name = 'cn'; Path = './ruleset/cn.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.yaml' },
+        [pscustomobject]@{ Name = 'proxy'; Path = './ruleset/proxy.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/proxy.yaml' },
+        [pscustomobject]@{ Name = 'google'; Path = './ruleset/google.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.yaml' },
+        [pscustomobject]@{ Name = 'github'; Path = './ruleset/github.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.yaml' },
+        [pscustomobject]@{ Name = 'telegram'; Path = './ruleset/telegram.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.yaml' },
+        [pscustomobject]@{ Name = 'openai'; Path = './ruleset/openai.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.yaml' },
+        [pscustomobject]@{ Name = 'youtube'; Path = './ruleset/youtube.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.yaml' },
+        [pscustomobject]@{ Name = 'netflix'; Path = './ruleset/netflix.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.yaml' },
+        [pscustomobject]@{ Name = 'spotify'; Path = './ruleset/spotify.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/spotify.yaml' },
+        [pscustomobject]@{ Name = 'twitter'; Path = './ruleset/twitter.yaml'; Url = 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitter.yaml' }
+    )
+
+    $Lines.Add('rule-providers:')
+    foreach ($provider in $providers) {
+        $Lines.Add(('  {0}:' -f $provider.Name))
+        $Lines.Add('    type: http')
+        $Lines.Add('    behavior: domain')
+        $Lines.Add('    format: yaml')
+        $Lines.Add(('    path: {0}' -f (ConvertTo-YamlSingleQuoted $provider.Path)))
+        $Lines.Add(('    url: {0}' -f (ConvertTo-YamlSingleQuoted $provider.Url)))
+        $Lines.Add('    interval: 86400')
+    }
+}
+
+function Get-StableDirectRules {
+    return @(
+        'DOMAIN-SUFFIX,local,DIRECT',
+        'DOMAIN-SUFFIX,localhost,DIRECT',
+        'DOMAIN-SUFFIX,lan,DIRECT',
+        'DOMAIN,localhost,DIRECT',
+        'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
+        'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
+        'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
+        'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
+        'IP-CIDR,169.254.0.0/16,DIRECT,no-resolve',
+        'IP-CIDR,100.64.0.0/10,DIRECT,no-resolve',
+        'IP-CIDR,224.0.0.0/4,DIRECT,no-resolve',
+        'IP-CIDR6,::1/128,DIRECT,no-resolve',
+        'IP-CIDR6,fc00::/7,DIRECT,no-resolve',
+        'IP-CIDR6,fe80::/10,DIRECT,no-resolve',
+        'DOMAIN-SUFFIX,cn,DIRECT',
+        'DOMAIN-SUFFIX,中国,DIRECT',
+        'DOMAIN-SUFFIX,公司,DIRECT',
+        'DOMAIN-SUFFIX,网络,DIRECT',
+        'DOMAIN-SUFFIX,gov.cn,DIRECT',
+        'DOMAIN-SUFFIX,edu.cn,DIRECT',
+        'DOMAIN-SUFFIX,ac.cn,DIRECT'
+    )
+}
+
+function Get-ChinaDirectRules {
+    return @(
+        'DOMAIN-SUFFIX,baidu.com,DIRECT',
+        'DOMAIN-SUFFIX,bdstatic.com,DIRECT',
+        'DOMAIN-SUFFIX,baidubce.com,DIRECT',
+        'DOMAIN-SUFFIX,qq.com,DIRECT',
+        'DOMAIN-SUFFIX,weixin.qq.com,DIRECT',
+        'DOMAIN-SUFFIX,wechat.com,DIRECT',
+        'DOMAIN-SUFFIX,gtimg.com,DIRECT',
+        'DOMAIN-SUFFIX,qpic.cn,DIRECT',
+        'DOMAIN-SUFFIX,alicdn.com,DIRECT',
+        'DOMAIN-SUFFIX,aliyun.com,DIRECT',
+        'DOMAIN-SUFFIX,alipay.com,DIRECT',
+        'DOMAIN-SUFFIX,taobao.com,DIRECT',
+        'DOMAIN-SUFFIX,tmall.com,DIRECT',
+        'DOMAIN-SUFFIX,mmstat.com,DIRECT',
+        'DOMAIN-SUFFIX,jd.com,DIRECT',
+        'DOMAIN-SUFFIX,360buyimg.com,DIRECT',
+        'DOMAIN-SUFFIX,bilibili.com,DIRECT',
+        'DOMAIN-SUFFIX,biliapi.net,DIRECT',
+        'DOMAIN-SUFFIX,biliapi.com,DIRECT',
+        'DOMAIN-SUFFIX,byteimg.com,DIRECT',
+        'DOMAIN-SUFFIX,bytedance.com,DIRECT',
+        'DOMAIN-SUFFIX,douyin.com,DIRECT',
+        'DOMAIN-SUFFIX,ixigua.com,DIRECT',
+        'DOMAIN-SUFFIX,toutiao.com,DIRECT',
+        'DOMAIN-SUFFIX,weibo.com,DIRECT',
+        'DOMAIN-SUFFIX,zhihu.com,DIRECT',
+        'DOMAIN-SUFFIX,163.com,DIRECT',
+        'DOMAIN-SUFFIX,126.com,DIRECT',
+        'DOMAIN-SUFFIX,netease.com,DIRECT',
+        'DOMAIN-SUFFIX,sina.com.cn,DIRECT',
+        'DOMAIN-SUFFIX,xiaomi.com,DIRECT',
+        'DOMAIN-SUFFIX,mi.com,DIRECT',
+        'DOMAIN-SUFFIX,huawei.com,DIRECT',
+        'DOMAIN-SUFFIX,hicloud.com,DIRECT',
+        'DOMAIN-SUFFIX,meituan.com,DIRECT',
+        'DOMAIN-SUFFIX,dianping.com,DIRECT',
+        'DOMAIN-SUFFIX,pinduoduo.com,DIRECT',
+        'DOMAIN-SUFFIX,yangkeduo.com,DIRECT',
+        'DOMAIN-SUFFIX,amap.com,DIRECT',
+        'DOMAIN-SUFFIX,autonavi.com,DIRECT',
+        'DOMAIN-SUFFIX,12306.cn,DIRECT',
+        'DOMAIN-SUFFIX,ccb.com,DIRECT',
+        'DOMAIN-SUFFIX,icbc.com.cn,DIRECT',
+        'DOMAIN-SUFFIX,abchina.com,DIRECT',
+        'DOMAIN-SUFFIX,boc.cn,DIRECT',
+        'DOMAIN-SUFFIX,bankcomm.com,DIRECT',
+        'DOMAIN-SUFFIX,unionpay.com,DIRECT',
+        'DOMAIN-SUFFIX,95516.com,DIRECT',
+        'DOMAIN-SUFFIX,steamcontent.com,DIRECT',
+        'DOMAIN-SUFFIX,steamserver.net,DIRECT',
+        'DOMAIN-SUFFIX,apple.com.cn,DIRECT',
+        'DOMAIN-SUFFIX,icloud.com.cn,DIRECT',
+        'DOMAIN-SUFFIX,cdn-apple.com,DIRECT',
+        'DOMAIN-SUFFIX,microsoft.com,DIRECT',
+        'DOMAIN-SUFFIX,windowsupdate.com,DIRECT',
+        'DOMAIN-SUFFIX,msftconnecttest.com,DIRECT',
+        'DOMAIN-SUFFIX,msftncsi.com,DIRECT'
+    )
+}
+
+function Get-ForeignProxyRules {
+    return @(
+        ('DOMAIN-SUFFIX,google.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,gstatic.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,googleapis.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,googlevideo.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,youtube.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,ytimg.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,github.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,githubusercontent.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,githubassets.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,telegram.org,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,t.me,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,openai.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,chatgpt.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,oaistatic.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,oaiusercontent.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,anthropic.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,claude.ai,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,gemini.google.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,ai.google.dev,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,discord.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,discordapp.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,x.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,twitter.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,twimg.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,facebook.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,fbcdn.net,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,instagram.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,threads.net,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,netflix.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,nflxvideo.net,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,spotify.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,scdn.co,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,steamcommunity.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,store.steampowered.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,tiktok.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,tiktokcdn.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,reddit.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,redd.it,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,cloudflare.com,{0}' -f $script:GroupProxy),
+        ('DOMAIN-SUFFIX,vercel.app,{0}' -f $script:GroupProxy)
+    )
+}
+
+function Get-RichRuleSetRules {
+    return @(
+        ('RULE-SET,google,{0}' -f $script:GroupProxy),
+        ('RULE-SET,github,{0}' -f $script:GroupProxy),
+        ('RULE-SET,telegram,{0}' -f $script:GroupProxy),
+        ('RULE-SET,openai,{0}' -f $script:GroupProxy),
+        ('RULE-SET,youtube,{0}' -f $script:GroupProxy),
+        ('RULE-SET,netflix,{0}' -f $script:GroupProxy),
+        ('RULE-SET,spotify,{0}' -f $script:GroupProxy),
+        ('RULE-SET,twitter,{0}' -f $script:GroupProxy),
+        ('RULE-SET,proxy,{0}' -f $script:GroupProxy),
+        'RULE-SET,cn,DIRECT'
+    )
+}
+
+function Get-Rules {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Stable', 'Hybrid', 'Rich')]
+        [string]$Profile
+    )
+
+    $rules = New-Object System.Collections.Generic.List[string]
+    foreach ($rule in (Get-StableDirectRules)) {
+        $rules.Add($rule)
+    }
+
+    if ($Profile -ne 'Stable') {
+        foreach ($rule in (Get-ChinaDirectRules)) {
+            $rules.Add($rule)
+        }
+        foreach ($rule in (Get-ForeignProxyRules)) {
+            $rules.Add($rule)
+        }
+    }
+
+    if ($Profile -eq 'Rich') {
+        foreach ($rule in (Get-RichRuleSetRules)) {
+            $rules.Add($rule)
+        }
+    }
+
+    $rules.Add(('MATCH,{0}' -f $script:GroupProxy))
+    return $rules.ToArray()
 }
 
 function Get-FixedProfileLines {
@@ -342,7 +607,11 @@ function Get-FixedProfileLines {
 
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
-        [object[]]$InfoRecords
+        [object[]]$InfoRecords,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Stable', 'Hybrid', 'Rich')]
+        [string]$RuleProfile
     )
 
     $lines = New-Object System.Collections.Generic.List[string]
@@ -356,6 +625,8 @@ function Get-FixedProfileLines {
     $lines.Add('ipv6: false')
     $lines.Add('unified-delay: true')
     $lines.Add('tcp-concurrent: true')
+    $lines.Add('')
+    Add-DnsConfig -Lines $lines
     $lines.Add('')
     $lines.Add('proxies:')
 
@@ -373,11 +644,12 @@ function Get-FixedProfileLines {
 
     $activeRegions = @($script:RegionOrder | Where-Object { $regionNames[$_].Count -gt 0 })
     $activeRegionGroupNames = @($activeRegions | ForEach-Object { $script:RegionGroupNames[$_] })
-    $proxyGroupEntries = @($script:GroupAuto, $script:GroupFallback) + $activeRegionGroupNames + @('DIRECT')
+    $proxyGroupEntries = @($script:GroupManual, $script:GroupAuto, $script:GroupFallback) + $activeRegionGroupNames + @('DIRECT')
 
     $lines.Add('')
     $lines.Add('proxy-groups:')
     Add-SelectGroup -Lines $lines -Name $script:GroupProxy -Names $proxyGroupEntries
+    Add-SelectGroup -Lines $lines -Name $script:GroupManual -Names $mainNames
     Add-HealthGroup -Lines $lines -Name $script:GroupAuto -Type 'url-test' -Names $mainNames
     Add-HealthGroup -Lines $lines -Name $script:GroupFallback -Type 'fallback' -Names $mainNames
 
@@ -388,59 +660,16 @@ function Get-FixedProfileLines {
     Add-SelectGroup -Lines $lines -Name $script:GroupInfo -Names $infoNames -AllowEmptyDirect
 
     $lines.Add('')
+    if ($RuleProfile -eq 'Rich') {
+        Add-RichRuleProviders -Lines $lines
+        $lines.Add('')
+    }
+
     $lines.Add('rules:')
-    $rules = @(
-        'DOMAIN-SUFFIX,local,DIRECT',
-        'DOMAIN-SUFFIX,localhost,DIRECT',
-        'DOMAIN-SUFFIX,lan,DIRECT',
-        'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
-        'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
-        'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
-        'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
-        'IP-CIDR,169.254.0.0/16,DIRECT,no-resolve',
-        'IP-CIDR,224.0.0.0/4,DIRECT,no-resolve',
-        'IP-CIDR6,::1/128,DIRECT,no-resolve',
-        'IP-CIDR6,fc00::/7,DIRECT,no-resolve',
-        'IP-CIDR6,fe80::/10,DIRECT,no-resolve',
-        'DOMAIN-SUFFIX,cn,DIRECT',
-        'DOMAIN-SUFFIX,中国,DIRECT',
-        'DOMAIN-SUFFIX,公司,DIRECT',
-        'DOMAIN-SUFFIX,网络,DIRECT',
-        'DOMAIN-SUFFIX,gov.cn,DIRECT',
-        'DOMAIN-SUFFIX,edu.cn,DIRECT',
-        'DOMAIN-SUFFIX,baidu.com,DIRECT',
-        'DOMAIN-SUFFIX,bdstatic.com,DIRECT',
-        'DOMAIN-SUFFIX,qq.com,DIRECT',
-        'DOMAIN-SUFFIX,weixin.qq.com,DIRECT',
-        'DOMAIN-SUFFIX,gtimg.com,DIRECT',
-        'DOMAIN-SUFFIX,alicdn.com,DIRECT',
-        'DOMAIN-SUFFIX,aliyun.com,DIRECT',
-        'DOMAIN-SUFFIX,taobao.com,DIRECT',
-        'DOMAIN-SUFFIX,tmall.com,DIRECT',
-        'DOMAIN-SUFFIX,jd.com,DIRECT',
-        'DOMAIN-SUFFIX,360buyimg.com,DIRECT',
-        'DOMAIN-SUFFIX,bilibili.com,DIRECT',
-        'DOMAIN-SUFFIX,biliapi.net,DIRECT',
-        'DOMAIN-SUFFIX,byteimg.com,DIRECT',
-        'DOMAIN-SUFFIX,bytedance.com,DIRECT',
-        'DOMAIN-SUFFIX,douyin.com,DIRECT',
-        'DOMAIN-SUFFIX,weibo.com,DIRECT',
-        'DOMAIN-SUFFIX,zhihu.com,DIRECT',
-        'DOMAIN-SUFFIX,163.com,DIRECT',
-        'DOMAIN-SUFFIX,126.com,DIRECT',
-        'DOMAIN-SUFFIX,netease.com,DIRECT',
-        'DOMAIN-SUFFIX,sina.com.cn,DIRECT',
-        'DOMAIN-SUFFIX,xiaomi.com,DIRECT',
-        'DOMAIN-SUFFIX,huawei.com,DIRECT',
-        'GEOSITE,private,DIRECT',
-        'GEOSITE,cn,DIRECT',
-        'GEOIP,private,DIRECT,no-resolve',
-        'GEOIP,CN,DIRECT',
-        ('MATCH,{0}' -f $script:GroupProxy)
-    )
+    $rules = @(Get-Rules -Profile $RuleProfile)
 
     foreach ($rule in $rules) {
-        $lines.Add(('  - {0}' -f $rule))
+        $lines.Add(('  - {0}' -f (ConvertTo-YamlSingleQuoted $rule)))
     }
 
     return $lines.ToArray()
@@ -457,13 +686,33 @@ function Test-GeneratedProfile {
 
         [Parameter(Mandatory = $true)]
         [AllowEmptyString()]
-        [string[]]$ProfileLines
+        [string[]]$ProfileLines,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Stable', 'Hybrid', 'Rich')]
+        [string]$RuleProfile
     )
 
     $text = $ProfileLines -join "`n"
-    foreach ($required in @('proxies:', 'proxy-groups:', 'rules:', ('MATCH,{0}' -f $script:GroupProxy))) {
+    foreach ($required in @('dns:', 'proxies:', 'proxy-groups:', 'rules:', $script:GroupManual, ('MATCH,{0}' -f $script:GroupProxy))) {
         if ($text -notmatch [regex]::Escape($required)) {
             throw ("生成配置缺少必要内容：{0}" -f $required)
+        }
+    }
+
+    $rulesStart = [array]::IndexOf($ProfileLines, 'rules:')
+    if ($rulesStart -lt 0) {
+        throw '生成配置缺少 rules:。'
+    }
+
+    $rulesText = ($ProfileLines | Select-Object -Skip ($rulesStart + 1)) -join "`n"
+    if ($RuleProfile -ne 'Rich' -and $rulesText -match '\b(GEOSITE|GEOIP|RULE-SET),') {
+        throw ("{0} 规则配置不应依赖 GEOSITE/GEOIP/RULE-SET。" -f $RuleProfile)
+    }
+
+    foreach ($line in ($ProfileLines | Select-Object -Skip ($rulesStart + 1))) {
+        if ($line -match '^\s*-\s+[^'']') {
+            throw ("规则未使用 YAML 单引号保护：{0}" -f $line.Trim())
         }
     }
 
@@ -500,7 +749,11 @@ function Show-Summary {
         [object[]]$UnsupportedRecords,
 
         [Parameter(Mandatory = $true)]
-        [string]$ResolvedOutputPath
+        [string]$ResolvedOutputPath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Stable', 'Hybrid', 'Rich')]
+        [string]$RuleProfile
     )
 
     Write-Host ''
@@ -509,6 +762,7 @@ function Show-Summary {
     Write-Host ('  🚀 可用代理节点：      {0}' -f $MainProxyRecords.Count)
     Write-Host ('  ℹ️ 订阅信息节点：      {0}' -f $InfoRecords.Count)
     Write-Host ('  ⚠️ 已跳过不兼容节点：  {0}' -f $UnsupportedRecords.Count)
+    Write-Host ('  🧭 规则方案：          {0}' -f $RuleProfile)
 
     foreach ($region in $script:RegionOrder) {
         $count = @($MainProxyRecords | Where-Object { $_.Region -eq $region }).Count
@@ -557,8 +811,8 @@ try {
         throw ("发现重复节点名称，请先修正订阅。示例：{0}" -f ($dupes -join ', '))
     }
 
-    $profileLines = Get-FixedProfileLines -Records $records -OutputProxyRecords $outputProxyRecords -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords
-    Test-GeneratedProfile -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords -ProfileLines $profileLines
+    $profileLines = Get-FixedProfileLines -Records $records -OutputProxyRecords $outputProxyRecords -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords -RuleProfile $RuleProfile
+    Test-GeneratedProfile -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords -ProfileLines $profileLines -RuleProfile $RuleProfile
 
     $outputDir = Split-Path -Parent $OutputPath
     if (-not (Test-Path -LiteralPath $outputDir)) {
@@ -568,7 +822,7 @@ try {
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
     [System.IO.File]::WriteAllText($OutputPath, (($profileLines -join "`r`n") + "`r`n"), $utf8NoBom)
 
-    Show-Summary -Records $records -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords -UnsupportedRecords $unsupportedRecords -ResolvedOutputPath $OutputPath
+    Show-Summary -Records $records -MainProxyRecords $mainProxyRecords -InfoRecords $infoRecords -UnsupportedRecords $unsupportedRecords -ResolvedOutputPath $OutputPath -RuleProfile $RuleProfile
     exit 0
 } catch {
     Write-Host ''

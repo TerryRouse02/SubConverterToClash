@@ -1,4 +1,7 @@
 # Sub-Store ClashMeta Fixer
+
+推荐仓库名：`substore-clashmeta-fixer`
+
 ## 这是什么
 
 用于修复任何或 Sub-Store 导出的 ClashMeta / Mihomo 订阅。
@@ -9,12 +12,14 @@
 
 - 原始节点
 - 中文策略组
-- 国内直连、其他走代理的基础规则
+- 中国用户稳定 DNS
+- 国内直连、常见国外服务走代理、其他走代理的规则
 
 ## 功能
 
 - 修复只有 `proxies:` 的 Sub-Store ClashMeta 输出。
 - 自动生成 `proxy-groups:` 和 `rules:`。
+- 默认使用中国地区更稳的 `Hybrid` 规则方案，不依赖远程规则源或 Geo 数据文件。
 - 保留 `trojan`、`vless`、`hysteria2`、`hy2` 等 Mihomo 常用节点。
 - 自动按节点名生成地区组。
 - 把刷新、到期、流量等信息节点放入 `ℹ️ 订阅信息`，不参与主代理组。
@@ -22,7 +27,11 @@
 
 ## 文件说明
 
-- `readme.md`
+- `Claude.md`
+  - 给 Claude / Codex 的维护边界。
+- `Agent.md`
+  - 给后续 Agent 的实现和验证说明。
+- `README-cn.md`
   - 当前用户使用说明。
 - `Generate-ClashMeta-Profile.bat`
   - Windows 双击入口。
@@ -45,6 +54,13 @@ Generate-ClashMeta-Profile.bat
 
 ```bat
 Generate-ClashMeta-Profile.bat "<订阅链接>"
+```
+
+默认使用 `Hybrid` 规则方案。需要切换时可以传第二个参数：
+
+```bat
+Generate-ClashMeta-Profile.bat "<订阅链接>" Stable
+Generate-ClashMeta-Profile.bat "<订阅链接>" Rich
 ```
 
 生成结果：
@@ -113,16 +129,41 @@ http(s)://<你的 Sub-Store 地址>/api/file/<随机文件ID或同步ID>
 
 ## 当前分流逻辑
 
-- 国内域名、`.cn`、常见国内服务、局域网、私有 IP、中国 GeoIP -> `DIRECT`
+- 局域网、私有地址、`.cn`、政务/教育、常见国内服务 -> `DIRECT`
+- Google、YouTube、GitHub、Telegram、OpenAI、Claude、Gemini、Discord、Twitter/X、Meta、Netflix、Spotify、Steam 等 -> `🚀 节点选择`
 - 其他未命中流量 -> `🚀 节点选择`
 
 这不是按 App 包名分流。Clash / Mihomo 主要按域名、IP 和规则集分流。
+
+## 规则方案
+
+- `Stable`
+  - 最小本地规则：局域网、私有地址、`.cn` 和基础国内域名直连，其他走代理。
+- `Hybrid`
+  - 默认推荐：纯本地规则，不依赖远程规则源或 Geo 数据文件，并扩充常见国内直连和国外代理域名。
+- `Rich`
+  - 高级可选：额外输出 `rule-providers`，使用远程规则集做更细分流。规则源下载失败时，部分客户端可能出现规则模式异常。
+
+如果 FlClash / Mihomo 切到规则模式后无网络，先确认使用默认 `Hybrid`，不要先开 `Rich`。
+
+## DNS 策略
+
+生成配置会写入稳定 DNS：
+
+- `223.5.5.5`
+- `119.29.29.29`
+- `114.114.114.114`
+- `https://dns.alidns.com/dns-query`
+- `https://doh.pub/dns-query`
+
+同时保留 `fake-ip-filter`，避免局域网、NTP、路由器登录、系统联网检测等地址被 fake-ip 影响。
 
 ## 策略组
 
 生成配置包含：
 
 - `🚀 节点选择`
+- `🧭 手动选择`
 - `⚡ 自动测速`
 - `🛟 故障转移`
 - `🇺🇸 美国节点`
@@ -135,3 +176,5 @@ http(s)://<你的 Sub-Store 地址>/api/file/<随机文件ID或同步ID>
 - `ℹ️ 订阅信息`
 
 注意：`DIRECT` 是 Clash / Mihomo 内置关键字，不能改成中文。
+
+默认情况下，`🚀 节点选择` 会优先包含 `🧭 手动选择`。如果 `⚡ 自动测速` 因网络检测失败不可用，切到 `🧭 手动选择` 仍然可以手动选节点。

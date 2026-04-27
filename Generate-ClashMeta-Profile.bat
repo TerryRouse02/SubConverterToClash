@@ -5,6 +5,7 @@ setlocal EnableExtensions
 set "SCRIPT_DIR=%~dp0"
 set "PS_SCRIPT=%SCRIPT_DIR%Generate-ClashMeta-Profile.ps1"
 set "SUB_URL="
+set "RULE_PROFILE=%~2"
 
 if not exist "%PS_SCRIPT%" (
   echo ❌ 缺少核心脚本："%PS_SCRIPT%"
@@ -34,7 +35,11 @@ if /i not "%SUB_URL:~0,4%"=="http" (
   exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -SubscriptionUrl "%SUB_URL%"
+if "%RULE_PROFILE%"=="" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -SubscriptionUrl "%SUB_URL%"
+) else (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -SubscriptionUrl "%SUB_URL%" -RuleProfile "%RULE_PROFILE%"
+)
 set "EXIT_CODE=%ERRORLEVEL%"
 
 echo.
